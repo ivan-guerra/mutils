@@ -2,7 +2,7 @@
 name = "recorder"
 version = "0.1.0"
 edition = "2024"
-description = "Record mouse movements."
+description = "Mouse gesture recorder"
 
 [dependencies]
 anyhow = "1.0"
