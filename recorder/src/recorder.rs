@@ -1,0 +1,145 @@
+use crate::segmenter::Segment;
+
+use std::fs::{self, File};
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+
+#[derive(Debug, Clone, clap::Args)]
+pub struct RecorderConfig {
+    /// Directory to store recordings
+    pub recording_dir: PathBuf,
+
+    /// Flush interval in seconds - how often to write segments to disk
+    #[arg(long, default_value_t = 5)]
+    pub flush_interval_secs: u64,
+
+    /// Rotation interval in minutes - how often to create a new recording file
+    #[arg(long, default_value_t = 60)]
+    pub rotation_interval_mins: u64,
+}
+
+impl RecorderConfig {
+    pub fn flush_interval(&self) -> Duration {
+        Duration::from_secs(self.flush_interval_secs)
+    }
+
+    pub fn rotation_interval(&self) -> Duration {
+        Duration::from_secs(self.rotation_interval_mins * 60)
+    }
+}
+
+pub struct Recorder {
+    config: RecorderConfig,
+    writer: BufWriter<File>,
+    current_file: PathBuf,
+    last_flush: std::time::SystemTime,
+    last_rotation: std::time::SystemTime,
+    pending_segments: Vec<Segment>,
+}
+
+impl Recorder {
+    pub fn new(config: RecorderConfig) -> Result<Self> {
+        fs::create_dir_all(&config.recording_dir)
+            .context("failed to create recording directory")?;
+
+        let (file_path, writer) = Self::create_new_file(&config.recording_dir)?;
+        let now = std::time::SystemTime::now();
+
+        Ok(Self {
+            config,
+            writer,
+            current_file: file_path,
+            last_flush: now,
+            last_rotation: now,
+            pending_segments: Vec::new(),
+        })
+    }
+
+    fn create_new_file(dir: &Path) -> Result<(PathBuf, BufWriter<File>)> {
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let filename = format!("segments_{}.bin", timestamp);
+        let path = dir.join(filename);
+
+        let file = File::create(&path)
+            .with_context(|| format!("failed to create file: {}", path.display()))?;
+
+        Ok((path, BufWriter::new(file)))
+    }
+
+    pub fn record(&mut self, segment: Segment) -> Result<()> {
+        self.pending_segments.push(segment);
+        self.check_flush()?;
+        self.check_rotation()?;
+        Ok(())
+    }
+
+    fn check_flush(&mut self) -> Result<()> {
+        let now = std::time::SystemTime::now();
+        let elapsed = now
+            .duration_since(self.last_flush)
+            .unwrap_or(Duration::ZERO);
+
+        if elapsed >= self.config.flush_interval() && !self.pending_segments.is_empty() {
+            self.flush()?;
+            self.last_flush = now;
+        }
+
+        Ok(())
+    }
+
+    fn check_rotation(&mut self) -> Result<()> {
+        let now = std::time::SystemTime::now();
+        let elapsed = now
+            .duration_since(self.last_rotation)
+            .unwrap_or(Duration::ZERO);
+
+        if elapsed >= self.config.rotation_interval() {
+            self.rotate()?;
+            self.last_rotation = now;
+        }
+
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        for segment in self.pending_segments.drain(..) {
+            let encoded = postcard::to_allocvec(&segment).context("failed to serialize segment")?;
+
+            // Write length prefix so we can deserialize multiple segments
+            let len = encoded.len() as u32;
+            self.writer
+                .write_all(&len.to_le_bytes())
+                .context("failed to write segment length")?;
+
+            self.writer
+                .write_all(&encoded)
+                .context("failed to write segment data")?;
+        }
+
+        self.writer.flush().context("failed to flush writer")?;
+        Ok(())
+    }
+
+    fn rotate(&mut self) -> Result<()> {
+        // Flush any pending data before rotation
+        if !self.pending_segments.is_empty() {
+            self.flush()?;
+        }
+
+        let (new_path, new_writer) = Self::create_new_file(&self.config.recording_dir)?;
+        self.writer = new_writer;
+        self.current_file = new_path;
+
+        Ok(())
+    }
+
+    pub fn finish(mut self) -> Result<()> {
+        if !self.pending_segments.is_empty() {
+            self.flush()?;
+        }
+        Ok(())
+    }
+}
