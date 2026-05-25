@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::Parser;
 use enigo::{Enigo, Mouse, Settings};
+use log::info;
 
 mod recorder;
 mod segmenter;
@@ -21,6 +22,10 @@ struct Args {
     #[arg(long, default_value_t = 60.0)]
     rate_hz: f64,
 
+    /// Enable debug logging
+    #[arg(long)]
+    log: bool,
+
     #[command(flatten)]
     recorder_config: RecorderConfig,
 
@@ -31,25 +36,38 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    println!(
-        "Recording to directory: {:?}",
-        args.recorder_config.recording_dir
+    if args.log {
+        simplelog::TermLogger::init(
+            simplelog::LevelFilter::Debug,
+            simplelog::ConfigBuilder::new()
+                .set_thread_level(simplelog::LevelFilter::Off)
+                .add_filter_allow_str("recorder")
+                .build(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        )
+        .context("Failed to initialize logger")?;
+    }
+
+    info!(
+        "Recording to directory: {}",
+        args.recorder_config.recording_dir.display()
     );
-    println!(
+    info!(
         "Flush interval: {}s",
         args.recorder_config.flush_interval_secs
     );
-    println!(
+    info!(
         "Rotation interval: {}min",
         args.recorder_config.rotation_interval_mins
     );
-    println!("Sample rate: {:.1}Hz", args.rate_hz);
+    info!("Sample rate: {:.1}Hz", args.rate_hz);
 
     // Setup Ctrl+C handler
     let running = Arc::new(AtomicBool::new(true));
     let running_clone = running.clone();
     ctrlc::set_handler(move || {
-        println!("\nReceived Ctrl+C, shutting down gracefully...");
+        info!("Received Ctrl+C, shutting down gracefully...");
         running_clone.store(false, Ordering::SeqCst);
     })?;
 
@@ -60,19 +78,19 @@ fn main() -> Result<()> {
     let sample_interval = Duration::from_secs_f64(1.0 / args.rate_hz);
     let start_time = Instant::now();
 
-    println!("Recording started. Press Ctrl+C to stop.");
+    info!("Recording started. Press Ctrl+C to stop.");
 
     while running.load(Ordering::SeqCst) {
         let loop_start = Instant::now();
 
         // Get current mouse position
         let (x, y) = enigo.location()?;
-        let t_ms = u64::try_from(start_time.elapsed().as_millis())?;
+        let t_ms = start_time.elapsed().as_millis() as u64;
 
         let sample = Sample {
             t_ms,
-            x: f64::from(x),
-            y: f64::from(y),
+            x: x as f64,
+            y: y as f64,
         };
 
         // Process sample through segmenter
@@ -86,7 +104,7 @@ fn main() -> Result<()> {
                 .last()
                 .context("segment must have at least one point")?;
 
-            println!(
+            info!(
                 "Segment detected: {} points, duration: {}ms",
                 segment.points().len(),
                 last.t_ms - first.t_ms
@@ -103,7 +121,7 @@ fn main() -> Result<()> {
 
     // Flush final segment and recorder
     if let Some(segment) = segmenter.finish()? {
-        println!(
+        info!(
             "Recording final segment with {} points",
             segment.points().len()
         );
@@ -111,7 +129,7 @@ fn main() -> Result<()> {
     }
 
     recorder.finish()?;
-    println!("Recording complete. Data saved.");
+    info!("Recording complete. Data saved.");
 
     Ok(())
 }
