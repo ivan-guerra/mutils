@@ -3,3 +3,4 @@ members = [
   "recorder",
 ]
 resolver = "2"
+license = "Unlicense"
