@@ -1,3 +1,10 @@
+//! Mouse gesture recorder application.
+//!
+//! Records continuous mouse movements and segments them into discrete gestures,
+//! saving the results to disk in a compressed binary format. The application
+//! samples mouse position at a configurable rate and uses movement detection
+//! and inactivity timeouts to identify meaningful gesture segments.
+
 use crate::recorder::{Recorder, RecorderConfig};
 use crate::segmenter::{Sample, Segmenter, SegmenterConfig};
 
@@ -11,10 +18,10 @@ use clap::Parser;
 use enigo::{Enigo, Mouse, Settings};
 use log::info;
 
-mod recorder;
-mod segmenter;
+pub mod recorder;
+pub mod segmenter;
 
-/// Mouse gesture recorder
+#[doc(hidden)]
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
@@ -33,6 +40,7 @@ struct Args {
     segmenter_config: SegmenterConfig,
 }
 
+#[doc(hidden)]
 fn main() -> Result<()> {
     let args = Args::parse();
 

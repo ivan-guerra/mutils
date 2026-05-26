@@ -1,3 +1,9 @@
+//! Persistent storage of gesture segments to disk.
+//!
+//! This module handles writing gesture segments to binary files with automatic
+//! flushing and rotation. Segments are serialized using postcard format and written
+//! with length prefixes for easy deserialization.
+
 use crate::segmenter::Segment;
 
 use std::fs::{self, File};
@@ -7,6 +13,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 
+/// Configuration parameters for the recorder.
 #[derive(Debug, Clone, clap::Args)]
 pub struct RecorderConfig {
     /// Directory to store recordings
@@ -22,15 +29,22 @@ pub struct RecorderConfig {
 }
 
 impl RecorderConfig {
+    /// Returns the flush interval as a Duration.
     pub fn flush_interval(&self) -> Duration {
         Duration::from_secs(self.flush_interval_secs)
     }
 
+    /// Returns the rotation interval as a Duration.
     pub fn rotation_interval(&self) -> Duration {
         Duration::from_secs(self.rotation_interval_mins * 60)
     }
 }
 
+/// Manages recording of gesture segments to disk with periodic flushing and file rotation.
+///
+/// The recorder buffers segments in memory and writes them to disk at regular intervals
+/// to balance I/O overhead with data safety. Files are rotated periodically to keep
+/// individual files manageable.
 pub struct Recorder {
     config: RecorderConfig,
     writer: BufWriter<File>,
@@ -41,6 +55,10 @@ pub struct Recorder {
 }
 
 impl Recorder {
+    /// Creates a new recorder with the given configuration.
+    ///
+    /// Creates the recording directory if it doesn't exist and opens the first
+    /// recording file.
     pub fn new(config: RecorderConfig) -> Result<Self> {
         fs::create_dir_all(&config.recording_dir)
             .context("failed to create recording directory")?;
@@ -58,6 +76,7 @@ impl Recorder {
         })
     }
 
+    /// Creates a new recording file with a timestamp-based name.
     fn create_new_file(dir: &Path) -> Result<(PathBuf, BufWriter<File>)> {
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let filename = format!("segments_{}.bin", timestamp);
@@ -69,6 +88,10 @@ impl Recorder {
         Ok((path, BufWriter::new(file)))
     }
 
+    /// Records a segment for writing.
+    ///
+    /// The segment is buffered and will be written to disk during the next flush.
+    /// Automatically triggers flush and rotation checks.
     pub fn record(&mut self, segment: Segment) -> Result<()> {
         self.pending_segments.push(segment);
         self.check_flush()?;
@@ -76,6 +99,7 @@ impl Recorder {
         Ok(())
     }
 
+    /// Checks if it's time to flush pending segments and does so if needed.
     fn check_flush(&mut self) -> Result<()> {
         let now = std::time::SystemTime::now();
         let elapsed = now
@@ -90,6 +114,7 @@ impl Recorder {
         Ok(())
     }
 
+    /// Checks if it's time to rotate to a new file and does so if needed.
     fn check_rotation(&mut self) -> Result<()> {
         let now = std::time::SystemTime::now();
         let elapsed = now
@@ -104,6 +129,10 @@ impl Recorder {
         Ok(())
     }
 
+    /// Writes all pending segments to disk.
+    ///
+    /// Each segment is serialized with postcard and prefixed with its length
+    /// as a little-endian u32 for deserialization.
     fn flush(&mut self) -> Result<()> {
         for segment in self.pending_segments.drain(..) {
             let encoded = postcard::to_allocvec(&segment).context("failed to serialize segment")?;
@@ -123,6 +152,9 @@ impl Recorder {
         Ok(())
     }
 
+    /// Rotates to a new recording file.
+    ///
+    /// Flushes pending data before creating a new file with a fresh timestamp.
     fn rotate(&mut self) -> Result<()> {
         // Flush any pending data before rotation
         if !self.pending_segments.is_empty() {
@@ -136,6 +168,9 @@ impl Recorder {
         Ok(())
     }
 
+    /// Finalizes recording by flushing any remaining segments.
+    ///
+    /// Should be called before dropping the recorder to ensure no data is lost.
     pub fn finish(mut self) -> Result<()> {
         if !self.pending_segments.is_empty() {
             self.flush()?;

@@ -1,14 +1,26 @@
+//! Segmentation of continuous mouse position samples into discrete gesture segments.
+//!
+//! This module provides functionality to process a stream of mouse position samples
+//! and identify meaningful gesture segments based on movement and inactivity criteria.
+//! A segment is created when the mouse moves and finalized when it becomes inactive
+//! or when explicitly flushed.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+/// A single mouse position sample with timestamp.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Sample {
+    /// Timestamp in milliseconds from start of recording.
     pub t_ms: u64,
+    /// X coordinate in screen pixels.
     pub x: f64,
+    /// Y coordinate in screen pixels.
     pub y: f64,
 }
 
 impl Sample {
+    /// Calculates Euclidean distance to another sample.
     fn distance_to(&self, other: &Self) -> f64 {
         let dx = other.x - self.x;
         let dy = other.y - self.y;
@@ -16,16 +28,21 @@ impl Sample {
     }
 }
 
+/// A sequence of samples representing a discrete gesture or mouse movement.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Segment {
     points: Vec<Sample>,
 }
 
 impl Segment {
+    /// Returns a slice of all samples in this segment.
     pub fn points(&self) -> &[Sample] {
         &self.points
     }
 
+    /// Calculates the duration of the segment in milliseconds.
+    ///
+    /// Returns the time difference between the first and last sample.
     fn duration(&self) -> Result<u64> {
         let first = self
             .points
@@ -38,6 +55,9 @@ impl Segment {
         Ok(last.t_ms.saturating_sub(first.t_ms))
     }
 
+    /// Calculates the displacement of the segment in pixels.
+    ///
+    /// Returns the straight-line distance from the first to the last sample.
     fn displacement(&self) -> Result<f64> {
         let first = self
             .points
@@ -50,6 +70,10 @@ impl Segment {
         Ok(first.distance_to(last))
     }
 
+    /// Checks if the segment meets validity criteria.
+    ///
+    /// A segment is valid if it has enough points, sufficient duration,
+    /// and sufficient displacement as defined by the configuration.
     fn is_valid(&self, config: &SegmenterConfig) -> Result<bool> {
         Ok(self.points.len() >= config.min_points
             && self.duration()? >= config.min_segment_duration_ms
@@ -57,6 +81,7 @@ impl Segment {
     }
 }
 
+/// Configuration parameters for gesture segmentation.
 #[derive(Debug, Clone, Copy, clap::Args)]
 pub struct SegmenterConfig {
     /// Movement epsilon in pixels - minimum distance to consider as movement
@@ -80,10 +105,11 @@ pub struct SegmenterConfig {
     pub min_points: usize,
 }
 
+#[doc(hidden)]
 enum State {
-    Idle {
-        last_sample: Option<Sample>,
-    },
+    /// Not currently recording a segment.
+    Idle { last_sample: Option<Sample> },
+    /// Actively recording a segment.
     Recording {
         segment: Vec<Sample>,
         last_sample: Sample,
@@ -92,12 +118,19 @@ enum State {
     },
 }
 
+/// State machine for segmenting a stream of mouse samples into discrete gestures.
+///
+/// The segmenter tracks mouse movement and identifies meaningful gesture segments
+/// by monitoring movement distance and inactivity periods. It filters out noise
+/// and only records segments that meet minimum criteria for duration, displacement,
+/// and point count.
 pub struct Segmenter {
     config: SegmenterConfig,
     state: State,
 }
 
 impl Segmenter {
+    /// Creates a new segmenter with the given configuration.
     pub fn new(config: SegmenterConfig) -> Self {
         Self {
             config,
@@ -105,6 +138,11 @@ impl Segmenter {
         }
     }
 
+    /// Processes a new sample and returns a completed segment if one is finalized.
+    ///
+    /// The segmenter transitions between idle and recording states based on mouse
+    /// movement. A segment is finalized and returned when inactivity is detected.
+    /// Invalid segments (too short, too small displacement, etc.) are discarded.
     pub fn push(&mut self, sample: Sample) -> Result<Option<Segment>> {
         match std::mem::replace(&mut self.state, State::Idle { last_sample: None }) {
             State::Idle { last_sample: None } => {
@@ -176,6 +214,10 @@ impl Segmenter {
         }
     }
 
+    /// Finalizes any in-progress segment and returns it if valid.
+    ///
+    /// This should be called when the sample stream ends to ensure the last
+    /// segment is not lost. Returns `None` if idle or if the segment is invalid.
     pub fn finish(self) -> Result<Option<Segment>> {
         match self.state {
             State::Recording { segment, .. } => {
