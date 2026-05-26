@@ -306,3 +306,288 @@ impl Segmenter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn default_config() -> SegmenterConfig {
+        SegmenterConfig {
+            move_epsilon_px: 2.0,
+            inactive_ms: 300,
+            min_segment_duration_ms: 40,
+            min_segment_displacement_px: 10.0,
+            min_points: 3,
+        }
+    }
+
+    fn sample(t_ms: u64, x: f64, y: f64) -> Sample {
+        Sample { t_ms, x, y }
+    }
+
+    #[test]
+    fn test_sample_distance() {
+        let s1 = sample(0, 0.0, 0.0);
+        let s2 = sample(0, 3.0, 4.0);
+        assert_eq!(s1.distance_to(&s2), 5.0);
+    }
+
+    #[test]
+    fn test_segment_duration() {
+        let segment = Segment {
+            points: vec![sample(100, 0.0, 0.0), sample(250, 10.0, 10.0)],
+        };
+        assert_eq!(segment.duration().unwrap(), 150);
+    }
+
+    #[test]
+    fn test_segment_displacement() {
+        let segment = Segment {
+            points: vec![sample(0, 0.0, 0.0), sample(100, 3.0, 4.0)],
+        };
+        assert_eq!(segment.displacement().unwrap(), 5.0);
+    }
+
+    #[test]
+    fn test_segment_validity() {
+        let config = default_config();
+
+        // Valid segment
+        let valid = Segment {
+            points: vec![
+                sample(0, 0.0, 0.0),
+                sample(20, 5.0, 0.0),
+                sample(50, 15.0, 0.0),
+            ],
+        };
+        assert!(valid.is_valid(&config).unwrap());
+
+        // Too few points
+        let few_points = Segment {
+            points: vec![sample(0, 0.0, 0.0), sample(100, 20.0, 0.0)],
+        };
+        assert!(!few_points.is_valid(&config).unwrap());
+
+        // Too short duration
+        let short_duration = Segment {
+            points: vec![
+                sample(0, 0.0, 0.0),
+                sample(10, 5.0, 0.0),
+                sample(20, 15.0, 0.0),
+            ],
+        };
+        assert!(!short_duration.is_valid(&config).unwrap());
+
+        // Too small displacement
+        let small_displacement = Segment {
+            points: vec![
+                sample(0, 0.0, 0.0),
+                sample(25, 1.0, 0.0),
+                sample(50, 2.0, 0.0),
+            ],
+        };
+        assert!(!small_displacement.is_valid(&config).unwrap());
+    }
+
+    #[test]
+    fn test_initial_sample() {
+        let mut segmenter = Segmenter::new(default_config());
+        let result = segmenter.push(sample(0, 10.0, 10.0)).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_no_movement_stays_idle() {
+        let mut segmenter = Segmenter::new(default_config());
+        segmenter.push(sample(0, 10.0, 10.0)).unwrap();
+
+        // Small movements below epsilon
+        let result = segmenter.push(sample(100, 10.5, 10.5)).unwrap();
+        assert!(result.is_none());
+
+        let result = segmenter.push(sample(200, 11.0, 10.0)).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_movement_starts_recording() {
+        let mut segmenter = Segmenter::new(default_config());
+        segmenter.push(sample(0, 10.0, 10.0)).unwrap();
+
+        // Movement above epsilon
+        let result = segmenter.push(sample(100, 15.0, 10.0)).unwrap();
+        assert!(result.is_none()); // Still recording, not finalized
+    }
+
+    #[test]
+    fn test_inactivity_finalizes_segment() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        // Start with initial position
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+
+        // Movement to start recording
+        segmenter.push(sample(10, 5.0, 0.0)).unwrap();
+        segmenter.push(sample(20, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(30, 15.0, 0.0)).unwrap();
+        segmenter.push(sample(50, 20.0, 0.0)).unwrap();
+
+        // Wait for inactivity timeout (300ms default)
+        let result = segmenter.push(sample(400, 20.0, 0.0)).unwrap();
+        assert!(result.is_some());
+
+        let segment = result.unwrap();
+        assert!(segment.points().len() == 5);
+    }
+
+    #[test]
+    fn test_invalid_segment_discarded() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        // Start with initial position
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+
+        // Very short movement
+        segmenter.push(sample(5, 3.0, 0.0)).unwrap();
+
+        // Immediate inactivity
+        let result = segmenter.push(sample(350, 3.0, 0.0)).unwrap();
+        assert!(result.is_none()); // Segment too short, discarded
+    }
+
+    #[test]
+    fn test_continuous_recording() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(10, 5.0, 0.0)).unwrap();
+        segmenter.push(sample(20, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(30, 15.0, 0.0)).unwrap();
+
+        // Continue moving, no inactivity
+        let result = segmenter.push(sample(40, 20.0, 0.0)).unwrap();
+        assert!(result.is_none()); // Still recording
+    }
+
+    #[test]
+    fn test_point_filtering() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(10, 5.0, 0.0)).unwrap();
+
+        // This point is too close to previous, should be filtered
+        segmenter.push(sample(20, 5.5, 0.0)).unwrap();
+
+        // This point is far enough
+        segmenter.push(sample(30, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(50, 20.0, 0.0)).unwrap();
+
+        // Trigger finalization
+        let result = segmenter.push(sample(400, 20.0, 0.0)).unwrap();
+        assert!(result.is_some());
+
+        let segment = result.unwrap();
+        // Should have filtered out the close point
+        assert_eq!(segment.points().len(), 4); // Initial + 3 recorded (one filtered)
+    }
+
+    #[test]
+    fn test_finish_with_active_segment() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(10, 5.0, 0.0)).unwrap();
+        segmenter.push(sample(20, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(50, 20.0, 0.0)).unwrap();
+
+        // Finish without waiting for inactivity
+        let result = segmenter.finish().unwrap();
+        assert!(result.is_some());
+
+        let segment = result.unwrap();
+        assert!(segment.points().len() == 4);
+    }
+
+    #[test]
+    fn test_finish_while_idle() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(100, 0.5, 0.0)).unwrap(); // No movement
+
+        let result = segmenter.finish().unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_finish_with_invalid_segment() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(5, 3.0, 0.0)).unwrap(); // Too short
+
+        let result = segmenter.finish().unwrap();
+        assert!(result.is_none()); // Invalid segment discarded
+    }
+
+    #[test]
+    fn test_multiple_segments() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        // First segment
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(10, 5.0, 0.0)).unwrap();
+        segmenter.push(sample(20, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(50, 20.0, 0.0)).unwrap();
+
+        let result1 = segmenter.push(sample(400, 20.0, 0.0)).unwrap();
+        assert!(result1.is_some());
+        assert_eq!(result1.unwrap().points().len(), 4);
+
+        // Second segment
+        segmenter.push(sample(500, 30.0, 0.0)).unwrap();
+        segmenter.push(sample(510, 35.0, 0.0)).unwrap();
+        segmenter.push(sample(520, 40.0, 0.0)).unwrap();
+        segmenter.push(sample(550, 50.0, 0.0)).unwrap();
+
+        let result2 = segmenter.push(sample(900, 50.0, 0.0)).unwrap();
+        assert!(result2.is_some());
+        assert_eq!(result2.unwrap().points().len(), 5); // Includes the idle sample at t=400
+    }
+
+    #[test]
+    fn test_zero_displacement_segment() {
+        let mut segmenter = Segmenter::new(default_config());
+
+        // Start and end at same position
+        segmenter.push(sample(0, 10.0, 10.0)).unwrap();
+        segmenter.push(sample(10, 15.0, 10.0)).unwrap();
+        segmenter.push(sample(20, 20.0, 10.0)).unwrap();
+        segmenter.push(sample(50, 10.0, 10.0)).unwrap(); // Back to start
+
+        let result = segmenter.push(sample(400, 10.0, 10.0)).unwrap();
+        assert!(result.is_none()); // Zero displacement, invalid
+    }
+
+    #[test]
+    fn test_custom_config() {
+        let config = SegmenterConfig {
+            move_epsilon_px: 5.0,
+            inactive_ms: 100,
+            min_segment_duration_ms: 20,
+            min_segment_displacement_px: 5.0,
+            min_points: 2,
+        };
+
+        let mut segmenter = Segmenter::new(config);
+
+        segmenter.push(sample(0, 0.0, 0.0)).unwrap();
+        segmenter.push(sample(10, 10.0, 0.0)).unwrap();
+        segmenter.push(sample(35, 20.0, 0.0)).unwrap();
+
+        // Inactivity timeout - enough time has passed
+        let result = segmenter.push(sample(150, 20.0, 0.0)).unwrap();
+        assert!(result.is_some());
+    }
+}
