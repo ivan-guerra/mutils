@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use log::{debug, info, trace};
 
 /// Configuration parameters for the recorder.
 #[derive(Debug, Clone, clap::Args)]
@@ -64,6 +65,7 @@ impl Recorder {
             .context("failed to create recording directory")?;
 
         let (file_path, writer) = Self::create_new_file(&config.recording_dir)?;
+        info!("Created initial recording file: {}", file_path.display());
         let now = std::time::SystemTime::now();
 
         Ok(Self {
@@ -82,6 +84,7 @@ impl Recorder {
         let filename = format!("segments_{}.bin", timestamp);
         let path = dir.join(filename);
 
+        debug!("Creating new recording file: {}", path.display());
         let file = File::create(&path)
             .with_context(|| format!("failed to create file: {}", path.display()))?;
 
@@ -93,7 +96,12 @@ impl Recorder {
     /// The segment is buffered and will be written to disk during the next flush.
     /// Automatically triggers flush and rotation checks.
     pub fn record(&mut self, segment: Segment) -> Result<()> {
+        trace!(
+            "Buffering segment ({} points) for recording",
+            segment.points().len()
+        );
         self.pending_segments.push(segment);
+        debug!("Total pending segments: {}", self.pending_segments.len());
         self.check_flush()?;
         self.check_rotation()?;
         Ok(())
@@ -107,8 +115,19 @@ impl Recorder {
             .unwrap_or(Duration::ZERO);
 
         if elapsed >= self.config.flush_interval() && !self.pending_segments.is_empty() {
+            debug!(
+                "Flush interval reached ({}s), flushing {} segments",
+                elapsed.as_secs(),
+                self.pending_segments.len()
+            );
             self.flush()?;
             self.last_flush = now;
+        } else {
+            trace!(
+                "No flush needed: elapsed={}s, pending={}",
+                elapsed.as_secs(),
+                self.pending_segments.len()
+            );
         }
 
         Ok(())
@@ -122,8 +141,14 @@ impl Recorder {
             .unwrap_or(Duration::ZERO);
 
         if elapsed >= self.config.rotation_interval() {
+            info!(
+                "Rotation interval reached ({}min), rotating to new file",
+                elapsed.as_secs() / 60
+            );
             self.rotate()?;
             self.last_rotation = now;
+        } else {
+            trace!("No rotation needed: elapsed={}min", elapsed.as_secs() / 60);
         }
 
         Ok(())
@@ -134,6 +159,9 @@ impl Recorder {
     /// Each segment is serialized with postcard and prefixed with its length
     /// as a little-endian u32 for deserialization.
     fn flush(&mut self) -> Result<()> {
+        let segment_count = self.pending_segments.len();
+        let mut total_bytes = 0usize;
+
         for segment in self.pending_segments.drain(..) {
             let encoded = postcard::to_allocvec(&segment).context("failed to serialize segment")?;
 
@@ -146,9 +174,17 @@ impl Recorder {
             self.writer
                 .write_all(&encoded)
                 .context("failed to write segment data")?;
+
+            total_bytes += 4 + encoded.len(); // length prefix + data
         }
 
         self.writer.flush().context("failed to flush writer")?;
+        info!(
+            "Flushed {} segments ({} bytes) to {}",
+            segment_count,
+            total_bytes,
+            self.current_file.display()
+        );
         Ok(())
     }
 
@@ -158,13 +194,23 @@ impl Recorder {
     fn rotate(&mut self) -> Result<()> {
         // Flush any pending data before rotation
         if !self.pending_segments.is_empty() {
+            debug!(
+                "Flushing {} pending segments before rotation",
+                self.pending_segments.len()
+            );
             self.flush()?;
         }
 
+        let old_file = self.current_file.display().to_string();
         let (new_path, new_writer) = Self::create_new_file(&self.config.recording_dir)?;
         self.writer = new_writer;
         self.current_file = new_path;
 
+        info!(
+            "Rotated from {} to {}",
+            old_file,
+            self.current_file.display()
+        );
         Ok(())
     }
 
@@ -173,7 +219,13 @@ impl Recorder {
     /// Should be called before dropping the recorder to ensure no data is lost.
     pub fn finish(mut self) -> Result<()> {
         if !self.pending_segments.is_empty() {
+            info!(
+                "Finishing recorder, flushing {} remaining segments",
+                self.pending_segments.len()
+            );
             self.flush()?;
+        } else {
+            info!("Finishing recorder (no pending segments)");
         }
         Ok(())
     }

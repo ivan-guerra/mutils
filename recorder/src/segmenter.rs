@@ -6,6 +6,7 @@
 //! or when explicitly flushed.
 
 use anyhow::{Context, Result};
+use log::{debug, trace};
 use serde::{Deserialize, Serialize};
 
 /// A single mouse position sample with timestamp.
@@ -146,6 +147,10 @@ impl Segmenter {
     pub fn push(&mut self, sample: Sample) -> Result<Option<Segment>> {
         match std::mem::replace(&mut self.state, State::Idle { last_sample: None }) {
             State::Idle { last_sample: None } => {
+                trace!(
+                    "Segmenter initialized with first sample at t={}ms",
+                    sample.t_ms
+                );
                 self.state = State::Idle {
                     last_sample: Some(sample),
                 };
@@ -155,7 +160,12 @@ impl Segmenter {
             State::Idle {
                 last_sample: Some(prev),
             } => {
-                if prev.distance_to(&sample) > self.config.move_epsilon_px {
+                let distance = prev.distance_to(&sample);
+                if distance > self.config.move_epsilon_px {
+                    debug!(
+                        "Movement detected ({}px), starting new segment at t={}ms",
+                        distance as u32, sample.t_ms
+                    );
                     self.state = State::Recording {
                         segment: vec![prev, sample],
                         last_sample: sample,
@@ -163,6 +173,10 @@ impl Segmenter {
                         last_movement_time: sample.t_ms,
                     };
                 } else {
+                    trace!(
+                        "No movement ({}px < {}px), remaining idle",
+                        distance as u32, self.config.move_epsilon_px as u32
+                    );
                     self.state = State::Idle {
                         last_sample: Some(sample),
                     };
@@ -176,21 +190,37 @@ impl Segmenter {
                 last_recorded_point,
                 mut last_movement_time,
             } => {
-                if prev_sample.distance_to(&sample) > self.config.move_epsilon_px {
+                let sample_distance = prev_sample.distance_to(&sample);
+                if sample_distance > self.config.move_epsilon_px {
+                    trace!(
+                        "Movement continues ({}px) at t={}ms",
+                        sample_distance as u32, sample.t_ms
+                    );
                     last_movement_time = sample.t_ms;
                 }
 
                 let last_recorded_point =
                     if last_recorded_point.distance_to(&sample) > self.config.move_epsilon_px {
+                        trace!(
+                            "Recording point {} at t={}ms",
+                            segment.len() + 1,
+                            sample.t_ms
+                        );
                         segment.push(sample);
                         sample
                     } else {
+                        trace!("Skipping point (too close to last recorded point)");
                         last_recorded_point
                     };
 
                 let inactive_duration = sample.t_ms.saturating_sub(last_movement_time);
 
                 if inactive_duration >= self.config.inactive_ms {
+                    debug!(
+                        "Inactivity timeout ({}ms), finalizing segment with {} points",
+                        inactive_duration,
+                        segment.len()
+                    );
                     self.state = State::Idle {
                         last_sample: Some(sample),
                     };
@@ -198,10 +228,36 @@ impl Segmenter {
                     let finished = Segment { points: segment };
 
                     if finished.is_valid(&self.config)? {
+                        let duration = finished.duration()?;
+                        let displacement = finished.displacement()?;
+                        debug!(
+                            "Segment valid: duration={}ms, displacement={}px, points={}",
+                            duration,
+                            displacement as u32,
+                            finished.points.len()
+                        );
                         return Ok(Some(finished));
+                    } else {
+                        let duration = finished.duration().unwrap_or(0);
+                        let displacement = finished.displacement().unwrap_or(0.0);
+                        debug!(
+                            "Segment invalid (discarded): duration={}ms (min {}ms), displacement={}px (min {}px), points={} (min {})",
+                            duration,
+                            self.config.min_segment_duration_ms,
+                            displacement as u32,
+                            self.config.min_segment_displacement_px as u32,
+                            finished.points.len(),
+                            self.config.min_points
+                        );
                     }
                     Ok(None)
                 } else {
+                    trace!(
+                        "Recording continues: {} points, inactive for {}ms (< {}ms)",
+                        segment.len(),
+                        inactive_duration,
+                        self.config.inactive_ms
+                    );
                     self.state = State::Recording {
                         segment,
                         last_sample: sample,
@@ -221,14 +277,28 @@ impl Segmenter {
     pub fn finish(self) -> Result<Option<Segment>> {
         match self.state {
             State::Recording { segment, .. } => {
+                debug!(
+                    "Finishing in-progress segment with {} points",
+                    segment.len()
+                );
                 let finished = Segment { points: segment };
                 if finished.is_valid(&self.config)? {
+                    let duration = finished.duration()?;
+                    let displacement = finished.displacement()?;
+                    debug!(
+                        "Final segment valid: duration={}ms, displacement={}px",
+                        duration, displacement as u32
+                    );
                     Ok(Some(finished))
                 } else {
+                    debug!("Final segment invalid (discarded)");
                     Ok(None)
                 }
             }
-            State::Idle { .. } => Ok(None),
+            State::Idle { .. } => {
+                debug!("Finishing with no active segment");
+                Ok(None)
+            }
         }
     }
 }

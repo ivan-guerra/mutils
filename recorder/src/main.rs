@@ -29,9 +29,9 @@ struct Args {
     #[arg(long, default_value_t = 60.0)]
     rate_hz: f64,
 
-    /// Enable debug logging
-    #[arg(long)]
-    log: bool,
+    /// Set logging level (off, error, warn, info, debug, trace)
+    #[arg(long, value_name = "LEVEL", default_value = "off")]
+    log_level: simplelog::LevelFilter,
 
     #[command(flatten)]
     recorder_config: RecorderConfig,
@@ -44,9 +44,9 @@ struct Args {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    if args.log {
+    if args.log_level != simplelog::LevelFilter::Off {
         simplelog::TermLogger::init(
-            simplelog::LevelFilter::Debug,
+            args.log_level,
             simplelog::ConfigBuilder::new()
                 .set_thread_level(simplelog::LevelFilter::Off)
                 .add_filter_allow_str("recorder")
@@ -70,7 +70,6 @@ fn main() -> Result<()> {
         args.recorder_config.rotation_interval_mins
     );
     info!("Sample rate: {:.1}Hz", args.rate_hz);
-
     // Setup Ctrl+C handler
     let running = Arc::new(AtomicBool::new(true));
     let running_clone = running.clone();

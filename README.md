@@ -36,7 +36,7 @@ recorder recording_dir
 With custom sampling rate and logging:
 
 ```bash
-recorder recording_dir --rate-hz 120 --log
+recorder recording_dir --rate-hz 120 --log-level info
 ```
 
 ### Command Line Options
@@ -47,7 +47,7 @@ Recording:
   --flush-interval-secs <SECS>     Write interval (default: 5)
   --rotation-interval-mins <MINS>  New file interval (default: 60)
   --rate-hz <HZ>                   Sampling rate (default: 60.0)
-  --log                            Enable debug logging
+  --log-level                      Set logging level (off, error, warn, info, debug, trace)
 
 Segmentation:
   --move-epsilon-px <PX>           Movement threshold (default: 2.0)
