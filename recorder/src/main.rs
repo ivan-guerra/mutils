@@ -92,12 +92,12 @@ fn main() -> Result<()> {
 
         // Get current mouse position
         let (x, y) = enigo.location()?;
-        let t_ms = start_time.elapsed().as_millis() as u64;
+        let t_ms = u64::try_from(start_time.elapsed().as_millis())?;
 
         let sample = Sample {
             t_ms,
-            x: x as f64,
-            y: y as f64,
+            x: f64::from(x),
+            y: f64::from(y),
         };
 
         // Process sample through segmenter

@@ -166,7 +166,7 @@ impl Recorder {
             let encoded = postcard::to_allocvec(&segment).context("failed to serialize segment")?;
 
             // Write length prefix so we can deserialize multiple segments
-            let len = encoded.len() as u32;
+            let len = u32::try_from(encoded.len())?;
             self.writer
                 .write_all(&len.to_le_bytes())
                 .context("failed to write segment length")?;

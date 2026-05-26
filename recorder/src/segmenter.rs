@@ -164,7 +164,8 @@ impl Segmenter {
                 if distance > self.config.move_epsilon_px {
                     debug!(
                         "Movement detected ({}px), starting new segment at t={}ms",
-                        distance as u32, sample.t_ms
+                        distance.trunc(),
+                        sample.t_ms
                     );
                     self.state = State::Recording {
                         segment: vec![prev, sample],
@@ -175,7 +176,8 @@ impl Segmenter {
                 } else {
                     trace!(
                         "No movement ({}px < {}px), remaining idle",
-                        distance as u32, self.config.move_epsilon_px as u32
+                        distance.trunc(),
+                        self.config.move_epsilon_px
                     );
                     self.state = State::Idle {
                         last_sample: Some(sample),
@@ -194,7 +196,8 @@ impl Segmenter {
                 if sample_distance > self.config.move_epsilon_px {
                     trace!(
                         "Movement continues ({}px) at t={}ms",
-                        sample_distance as u32, sample.t_ms
+                        sample_distance.trunc(),
+                        sample.t_ms
                     );
                     last_movement_time = sample.t_ms;
                 }
@@ -233,7 +236,7 @@ impl Segmenter {
                         debug!(
                             "Segment valid: duration={}ms, displacement={}px, points={}",
                             duration,
-                            displacement as u32,
+                            displacement.trunc(),
                             finished.points.len()
                         );
                         return Ok(Some(finished));
@@ -244,8 +247,8 @@ impl Segmenter {
                             "Segment invalid (discarded): duration={}ms (min {}ms), displacement={}px (min {}px), points={} (min {})",
                             duration,
                             self.config.min_segment_duration_ms,
-                            displacement as u32,
-                            self.config.min_segment_displacement_px as u32,
+                            displacement.trunc(),
+                            self.config.min_segment_displacement_px.trunc(),
                             finished.points.len(),
                             self.config.min_points
                         );
@@ -287,7 +290,8 @@ impl Segmenter {
                     let displacement = finished.displacement()?;
                     debug!(
                         "Final segment valid: duration={}ms, displacement={}px",
-                        duration, displacement as u32
+                        duration,
+                        displacement.trunc()
                     );
                     Ok(Some(finished))
                 } else {
