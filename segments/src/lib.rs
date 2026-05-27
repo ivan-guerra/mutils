@@ -5,9 +5,17 @@
 //! A segment is created when the mouse moves and finalized when it becomes inactive
 //! or when explicitly flushed.
 
-use anyhow::{Context, Result};
 use log::{debug, trace};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+/// Errors that can occur during segmentation operations.
+#[derive(Error, Debug)]
+pub enum SegmentError {
+    /// Attempted to calculate properties on an empty segment.
+    #[error("segment must have at least one point")]
+    EmptySegment,
+}
 
 /// A single mouse position sample with timestamp.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -44,30 +52,18 @@ impl Segment {
     /// Calculates the duration of the segment in milliseconds.
     ///
     /// Returns the time difference between the first and last sample.
-    pub fn duration(&self) -> Result<u64> {
-        let first = self
-            .points
-            .first()
-            .context("segment must have at least one point for duration")?;
-        let last = self
-            .points
-            .last()
-            .context("segment must have at least one point for duration")?;
+    pub fn duration(&self) -> Result<u64, SegmentError> {
+        let first = self.points.first().ok_or(SegmentError::EmptySegment)?;
+        let last = self.points.last().ok_or(SegmentError::EmptySegment)?;
         Ok(last.t_ms.saturating_sub(first.t_ms))
     }
 
     /// Calculates the displacement of the segment in pixels.
     ///
     /// Returns the straight-line distance from the first to the last sample.
-    pub fn displacement(&self) -> Result<f64> {
-        let first = self
-            .points
-            .first()
-            .context("segment must have at least one point for displacement")?;
-        let last = self
-            .points
-            .last()
-            .context("segment must have at least one point for displacement")?;
+    pub fn displacement(&self) -> Result<f64, SegmentError> {
+        let first = self.points.first().ok_or(SegmentError::EmptySegment)?;
+        let last = self.points.last().ok_or(SegmentError::EmptySegment)?;
         Ok(first.distance_to(last))
     }
 
@@ -75,7 +71,7 @@ impl Segment {
     ///
     /// A segment is valid if it has enough points, sufficient duration,
     /// and sufficient displacement as defined by the configuration.
-    pub fn is_valid(&self, config: &SegmenterConfig) -> Result<bool> {
+    pub fn is_valid(&self, config: &SegmenterConfig) -> Result<bool, SegmentError> {
         Ok(self.points.len() >= config.min_points
             && self.duration()? >= config.min_segment_duration_ms
             && self.displacement()? >= config.min_segment_displacement_px)
@@ -144,7 +140,7 @@ impl Segmenter {
     /// The segmenter transitions between idle and recording states based on mouse
     /// movement. A segment is finalized and returned when inactivity is detected.
     /// Invalid segments (too short, too small displacement, etc.) are discarded.
-    pub fn push(&mut self, sample: Sample) -> Result<Option<Segment>> {
+    pub fn push(&mut self, sample: Sample) -> Result<Option<Segment>, SegmentError> {
         match std::mem::replace(&mut self.state, State::Idle { last_sample: None }) {
             State::Idle { last_sample: None } => {
                 trace!(
@@ -277,7 +273,7 @@ impl Segmenter {
     ///
     /// This should be called when the sample stream ends to ensure the last
     /// segment is not lost. Returns `None` if idle or if the segment is invalid.
-    pub fn finish(self) -> Result<Option<Segment>> {
+    pub fn finish(self) -> Result<Option<Segment>, SegmentError> {
         match self.state {
             State::Recording { segment, .. } => {
                 debug!(
