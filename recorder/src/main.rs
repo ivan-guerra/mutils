@@ -49,6 +49,7 @@ fn main() -> Result<()> {
             simplelog::ConfigBuilder::new()
                 .set_thread_level(simplelog::LevelFilter::Off)
                 .add_filter_allow_str("recorder")
+                .add_filter_allow_str("segments")
                 .build(),
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto,

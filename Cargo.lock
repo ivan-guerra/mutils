@@ -711,7 +711,6 @@ dependencies = [
  "clap",
  "log",
  "serde",
- "simplelog",
 ]
 
 [[package]]
