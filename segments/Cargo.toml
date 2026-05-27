@@ -2,6 +2,7 @@
 name = "segments"
 version = "0.1.0"
 edition = "2024"
+description = "Segmentation of continuous mouse position samples into discrete gesture segments"
 
 [dependencies]
 thiserror = "2.0"
