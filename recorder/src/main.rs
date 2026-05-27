@@ -6,7 +6,7 @@
 //! and inactivity timeouts to identify meaningful gesture segments.
 
 use crate::recorder::{Recorder, RecorderConfig};
-use crate::segmenter::{Sample, Segmenter, SegmenterConfig};
+use segments::{Sample, Segmenter, SegmenterConfig};
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,7 +19,6 @@ use enigo::{Enigo, Mouse, Settings};
 use log::info;
 
 pub mod recorder;
-pub mod segmenter;
 
 #[doc(hidden)]
 #[derive(Parser, Debug)]

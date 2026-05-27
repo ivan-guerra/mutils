@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "recorder",
+  "recorder", "segments",
 ]
 resolver = "2"
 license = "Unlicense"

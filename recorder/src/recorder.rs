@@ -4,7 +4,7 @@
 //! flushing and rotation. Segments are serialized using postcard format and written
 //! with length prefixes for easy deserialization.
 
-use crate::segmenter::Segment;
+use segments::Segment;
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};

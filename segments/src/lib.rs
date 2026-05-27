@@ -44,7 +44,7 @@ impl Segment {
     /// Calculates the duration of the segment in milliseconds.
     ///
     /// Returns the time difference between the first and last sample.
-    fn duration(&self) -> Result<u64> {
+    pub fn duration(&self) -> Result<u64> {
         let first = self
             .points
             .first()
@@ -59,7 +59,7 @@ impl Segment {
     /// Calculates the displacement of the segment in pixels.
     ///
     /// Returns the straight-line distance from the first to the last sample.
-    fn displacement(&self) -> Result<f64> {
+    pub fn displacement(&self) -> Result<f64> {
         let first = self
             .points
             .first()
@@ -75,7 +75,7 @@ impl Segment {
     ///
     /// A segment is valid if it has enough points, sufficient duration,
     /// and sufficient displacement as defined by the configuration.
-    fn is_valid(&self, config: &SegmenterConfig) -> Result<bool> {
+    pub fn is_valid(&self, config: &SegmenterConfig) -> Result<bool> {
         Ok(self.points.len() >= config.min_points
             && self.duration()? >= config.min_segment_duration_ms
             && self.displacement()? >= config.min_segment_displacement_px)
