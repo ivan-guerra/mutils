@@ -3,6 +3,7 @@ name = "recorder"
 version = "0.2.0"
 edition = "2024"
 description = "Mouse gesture recorder"
+license = "Unlicense"
 
 [dependencies]
 anyhow = "1.0"

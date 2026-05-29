@@ -3,6 +3,7 @@ name = "mousesim"
 version = "0.1.0"
 edition = "2024"
 description = "A mouse movement simulator that generates human-like mouse movements using pre-recorded gesture segments"
+license = "Unlicense"
 
 [dependencies]
 enigo = "0.6.1"
