@@ -650,6 +650,7 @@ dependencies = [
 name = "pathgen"
 version = "0.1.0"
 dependencies = [
+ "enigo",
  "log",
  "ordered-float",
  "postcard",

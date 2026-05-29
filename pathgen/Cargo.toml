@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+enigo = "0.6.1"
 log = "0.4"
 ordered-float = "5.3"
 postcard = "1.1"
