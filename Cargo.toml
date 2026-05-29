@@ -1,6 +1,4 @@
 [workspace]
-members = ["pathgen",
-  "recorder", "segments",
-]
+members = [ "mousesim", "recorder", "segments" ]
 resolver = "2"
 license = "Unlicense"

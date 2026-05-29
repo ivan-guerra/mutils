@@ -532,6 +532,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mousesim"
+version = "0.1.0"
+dependencies = [
+ "enigo",
+ "log",
+ "ordered-float",
+ "postcard",
+ "rstar",
+ "segments",
+ "thiserror",
+]
+
+[[package]]
 name = "nix"
 version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -644,19 +657,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7d950ca161dc355eaf28f82b11345ed76c6e1f6eb1f4f4479e0323b9e2fbd0e"
 dependencies = [
  "num-traits",
-]
-
-[[package]]
-name = "pathgen"
-version = "0.1.0"
-dependencies = [
- "enigo",
- "log",
- "ordered-float",
- "postcard",
- "rstar",
- "segments",
- "thiserror",
 ]
 
 [[package]]
