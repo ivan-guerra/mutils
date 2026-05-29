@@ -21,7 +21,7 @@ pub enum SegmentError {
 /// A single mouse position sample with timestamp.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Sample {
-    /// Timestamp in milliseconds from start of current segment recording.
+    /// Timestamp in milliseconds from start of recording.
     pub t_ms: u64,
     /// X coordinate in screen pixels.
     pub x: f64,
