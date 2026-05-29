@@ -19,12 +19,16 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: recorder
-            asset_name: recorder-linux-x86_64
+            recorder_artifact: recorder
+            mousesim_artifact: mousesim
+            recorder_asset: recorder-linux-x86_64
+            mousesim_asset: mousesim-linux-x86_64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: recorder.exe
-            asset_name: recorder-windows-x86_64.exe
+            recorder_artifact: recorder.exe
+            mousesim_artifact: mousesim.exe
+            recorder_asset: recorder-windows-x86_64.exe
+            mousesim_asset: mousesim-windows-x86_64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout code
@@ -41,16 +45,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libx11-dev libxtst-dev libxinerama-dev libxrandr-dev libxi-dev
 
-      - name: Build release binary
+      - name: Build recorder binary
         run:
           cargo build --release --target ${{ matrix.target }} --package recorder
 
-      - name: Rename binary
-        run: |
-          cp ./target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+      - name: Build mousesim binary
+        run:
+          cargo build --release --target ${{ matrix.target }} --package mousesim
 
-      - name: Upload Release Asset
+      - name: Rename binaries
+        run: |
+          cp ./target/${{ matrix.target }}/release/${{ matrix.recorder_artifact }} ${{ matrix.recorder_asset }}
+          cp ./target/${{ matrix.target }}/release/${{ matrix.mousesim_artifact }} ${{ matrix.mousesim_asset }}
+
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ matrix.asset_name }}
+          files: |
+            ${{ matrix.recorder_asset }}
+            ${{ matrix.mousesim_asset }}
           generate_release_notes: true
