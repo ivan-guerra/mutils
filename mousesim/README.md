@@ -23,8 +23,8 @@ segments, creating smooth, human-like cursor trajectories.
 
 ## Installation
 
-You can download pre-built binaries for Windows and Linux from the
-[releases page](../../releases).
+You can download pre-built binaries for Windows and Linux from the [releases
+page][1].
 
 To use as a library, add it to your `Cargo.toml`:
 
@@ -100,3 +100,5 @@ move_mouse_humanlike(&db, start, target)?;
   processing
 - **[recorder](../recorder)** - Application for recording mouse gestures into
   segment databases
+
+[1]: https://github.com/ivan-guerra/mutils/releases
