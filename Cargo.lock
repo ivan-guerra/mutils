@@ -535,12 +535,15 @@ dependencies = [
 name = "mousesim"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "clap",
  "enigo",
  "log",
  "ordered-float",
  "postcard",
  "rstar",
  "segments",
+ "simplelog",
  "thiserror",
 ]
 

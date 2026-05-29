@@ -6,10 +6,13 @@ description = "A mouse movement simulator that generates human-like mouse moveme
 license = "Unlicense"
 
 [dependencies]
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
 enigo = "0.6.1"
 log = "0.4"
 ordered-float = "5.3"
 postcard = "1.1"
 rstar = "0.13"
-thiserror = "2.0"
 segments = { path = "../segments" }
+simplelog = "0.12"
+thiserror = "2.0"
