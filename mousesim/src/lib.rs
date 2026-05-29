@@ -10,6 +10,7 @@ use std::thread;
 use std::time::Duration;
 
 use enigo::{Coordinate, Enigo, Mouse, Settings};
+use log::{debug, trace};
 use thiserror::Error;
 
 mod database;
@@ -51,6 +52,11 @@ pub fn move_mouse_humanlike(
     let target_dx = f64::from(dst.0 - src.0);
     let target_dy = f64::from(dst.1 - src.1);
 
+    debug!(
+        "Target movement: ({}, {}) -> ({}, {}), displacement: ({:.2}, {:.2})",
+        src.0, src.1, dst.0, dst.1, target_dx, target_dy
+    );
+
     // Query the database for the closest trajectory match
     let matched_seg = segdb
         .find_nearest(target_dx, target_dy)
@@ -60,6 +66,8 @@ pub fn move_mouse_humanlike(
     if total_samples < 2 {
         return Err(MouseSimError::InsufficientSamples(total_samples));
     }
+
+    debug!("Matched segment with {} samples", total_samples);
 
     // Establish our baseline recording origin from the first sample
     let (origin_x, origin_y) = (matched_seg.points()[0].x, matched_seg.points()[0].y);
@@ -76,11 +84,17 @@ pub fn move_mouse_humanlike(
     let error_x = target_dx - recorded_dx;
     let error_y = target_dy - recorded_dy;
 
+    debug!(
+        "Recorded displacement: ({:.2}, {:.2}), error vector: ({:.2}, {:.2})",
+        recorded_dx, recorded_dy, error_x, error_y
+    );
+
     // Execute the playback loop
     for (i, sample) in matched_seg.points().iter().enumerate() {
         // Since timestamps are relative to the previous frame, we sleep *before* moving.
         // The first sample is 0ms, so it executes instantly.
         if sample.t_ms > 0 {
+            debug!("Sleeping for {} ms before sample {}", sample.t_ms, i + 1);
             thread::sleep(Duration::from_millis(sample.t_ms));
         }
 
@@ -95,9 +109,22 @@ pub fn move_mouse_humanlike(
         let final_x = (f64::from(src.0) + human_offset_x + (progress * error_x)).round() as i32;
         let final_y = (f64::from(src.1) + human_offset_y + (progress * error_y)).round() as i32;
 
+        trace!(
+            "Sample {}/{}: offset=({:.2}, {:.2}), progress={:.2}, final=({}, {})",
+            i + 1,
+            total_samples,
+            human_offset_x,
+            human_offset_y,
+            progress,
+            final_x,
+            final_y
+        );
+
         // Move the mouse
         enigo.move_mouse(final_x, final_y, Coordinate::Abs)?;
     }
+
+    debug!("Movement completed successfully");
 
     Ok(())
 }
