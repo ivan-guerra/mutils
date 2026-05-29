@@ -1,5 +1,5 @@
 [workspace]
-members = [
+members = ["pathgen",
   "recorder", "segments",
 ]
 resolver = "2"

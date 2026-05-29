@@ -6,6 +6,7 @@
 //! or when explicitly flushed.
 
 use log::{debug, trace};
+use rstar::{AABB, PointDistance, RTreeObject};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -38,7 +39,7 @@ impl Sample {
 }
 
 /// A sequence of samples representing a discrete gesture or mouse movement.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Segment {
     points: Vec<Sample>,
 }
@@ -67,6 +68,15 @@ impl Segment {
         Ok(first.distance_to(last))
     }
 
+    /// Calculates the displacement vector (dx, dy) from start to end.
+    ///
+    /// Returns the change in x and y coordinates from the first to last sample.
+    pub fn displacement_vector(&self) -> Result<(f64, f64), SegmentError> {
+        let first = self.points.first().ok_or(SegmentError::EmptySegment)?;
+        let last = self.points.last().ok_or(SegmentError::EmptySegment)?;
+        Ok((last.x - first.x, last.y - first.y))
+    }
+
     /// Checks if the segment meets validity criteria.
     ///
     /// A segment is valid if it has enough points, sufficient duration,
@@ -75,6 +85,28 @@ impl Segment {
         Ok(self.points.len() >= config.min_points
             && self.duration()? >= config.min_segment_duration_ms
             && self.displacement()? >= config.min_segment_displacement_px)
+    }
+}
+
+impl RTreeObject for Segment {
+    type Envelope = AABB<[f64; 2]>;
+
+    fn envelope(&self) -> Self::Envelope {
+        // Use displacement vector as the spatial key
+        // For a point in 2D space, the envelope is just that point
+        match self.displacement_vector() {
+            Ok((dx, dy)) => AABB::from_point([dx, dy]),
+            Err(_) => AABB::from_point([0.0, 0.0]), // Fallback for empty segments
+        }
+    }
+}
+
+impl PointDistance for Segment {
+    fn distance_2(&self, point: &[f64; 2]) -> f64 {
+        let (dx, dy) = self.displacement_vector().unwrap_or((0.0, 0.0));
+        let diff_x = dx - point[0];
+        let diff_y = dy - point[1];
+        diff_x * diff_x + diff_y * diff_y
     }
 }
 
@@ -342,6 +374,14 @@ mod tests {
             points: vec![sample(0, 0.0, 0.0), sample(100, 3.0, 4.0)],
         };
         assert_eq!(segment.displacement().unwrap(), 5.0);
+    }
+
+    #[test]
+    fn test_segment_displacement_vector() {
+        let segment = Segment {
+            points: vec![sample(0, 0.0, 0.0), sample(100, 3.0, 4.0)],
+        };
+        assert_eq!(segment.displacement_vector().unwrap(), (3.0, 4.0));
     }
 
     #[test]

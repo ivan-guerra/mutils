@@ -1,0 +1,12 @@
+[package]
+name = "pathgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+log = "0.4"
+ordered-float = "5.3"
+postcard = "1.1"
+rstar = "0.13"
+thiserror = "2.0"
+segments = { path = "../segments" }
