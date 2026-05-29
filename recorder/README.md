@@ -15,8 +15,8 @@ into discrete gestures, saving them in a compressed binary format.
 
 ## Installation
 
-You can download pre-built binaries for Windows and Linux from the
-[releases page](../../releases).
+You can download pre-built binaries for Windows and Linux from the [releases
+page][1].
 
 ## Usage
 
@@ -55,3 +55,5 @@ The segments are made of `Sample` records, each containing:
 - `t_ms`: Timestamp in milliseconds relativ to the beginning of the recording
 - `x`: Mouse X coordinate in pixels
 - `y`: Mouse Y coordinate in pixels
+
+[1]: https://github.com/ivan-guerra/mutils/releases
