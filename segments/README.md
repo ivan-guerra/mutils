@@ -28,11 +28,10 @@ recognize mouse gestures.
 
 To use as a library, add it to your `Cargo.toml`:
 
-````toml
 ```toml
 [dependencies]
 segments = { git = "https://github.com/ivan-guerra/mutils", branch = "master" }
-````
+```
 
 ## Basic Example
 
