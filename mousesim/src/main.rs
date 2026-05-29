@@ -1,3 +1,5 @@
+//! Command-line tool for simulating human-like mouse movements using recorded segment data.
+
 use std::io::{self, Write};
 use std::path::PathBuf;
 
