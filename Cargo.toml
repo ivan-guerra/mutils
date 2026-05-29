@@ -1,4 +1,3 @@
 [workspace]
 members = [ "mousesim", "recorder", "segments" ]
 resolver = "2"
-license = "Unlicense"
