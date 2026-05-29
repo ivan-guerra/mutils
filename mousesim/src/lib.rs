@@ -39,7 +39,19 @@ pub enum MouseSimError {
     MouseMovement(String),
 }
 
-/// Moves the mouse cursor from `src` to `dst` using a human-like trajectory pattern
+/// Moves the mouse cursor from `src` to `dst` using a human-like trajectory pattern.
+///
+/// This function simulates natural mouse movement by:
+/// 1. Querying the segment database for a trajectory that most closely matches the
+///    target movement vector (displacement from source to destination)
+/// 2. Replaying the matched trajectory's recorded samples with original timing
+/// 3. Applying proportional error correction at each step to ensure the final
+///    position exactly reaches the target destination
+///
+/// The error correction works by calculating the difference between the recorded trajectory's
+/// endpoint and the target endpoint, then distributing this error proportionally across all
+/// samples based on their progress through the movement. This maintains the human-like
+/// characteristics of the trajectory while guaranteeing accuracy.
 pub fn move_mouse_humanlike(
     segdb: &SegmentDatabase,
     src: (i32, i32),
