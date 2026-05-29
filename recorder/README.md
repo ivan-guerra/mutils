@@ -3,9 +3,6 @@
 A mouse gesture recorder that captures and segments continuous mouse movements
 into discrete gestures, saving them in a compressed binary format.
 
-For a library/binary combo that shows how to work with segment recordings, see
-the [`mousesim`][1] crate that's part of this workspace.
-
 ## Features
 
 - **High-frequency sampling** - Configurable sampling rate (default 60Hz)
@@ -58,5 +55,3 @@ The segments are made of `Sample` records, each containing:
 - `t_ms`: Timestamp in milliseconds relativ to the beginning of the recording
 - `x`: Mouse X coordinate in pixels
 - `y`: Mouse Y coordinate in pixels
-
-[1]: ../mousesim/README.md
