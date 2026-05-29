@@ -112,7 +112,7 @@ impl SegmentDatabase {
     /// Find the k nearest segments to a given displacement vector
     ///
     /// Returns iterator over the k nearest segments with their squared distances
-    pub fn find_nearest(
+    pub fn find_k_nearest(
         &self,
         dx: f64,
         dy: f64,
@@ -121,6 +121,15 @@ impl SegmentDatabase {
         self.spatial_index
             .nearest_neighbor_iter_with_distance_2([dx, dy])
             .take(k)
+    }
+
+    // Find the single nearest segment to a given displacement vector
+    //
+    // Returns the nearest segment
+    pub fn find_nearest(&self, dx: f64, dy: f64) -> Option<&Segment> {
+        self.spatial_index
+            .nearest_neighbor_with_distance_2([dx, dy])
+            .map(|(segment, _)| segment)
     }
 
     /// Access the R-tree directly for custom queries
