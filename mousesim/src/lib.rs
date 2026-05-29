@@ -91,11 +91,17 @@ pub fn move_mouse_humanlike(
 
     // Execute the playback loop
     for (i, sample) in matched_seg.points().iter().enumerate() {
-        // Since timestamps are relative to the previous frame, we sleep *before* moving.
-        // The first sample is 0ms, so it executes instantly.
-        if sample.t_ms > 0 {
-            debug!("Sleeping for {} ms before sample {}", sample.t_ms, i + 1);
-            thread::sleep(Duration::from_millis(sample.t_ms));
+        // Calculate time delta from previous sample (or from origin for first sample)
+        let time_delta_ms = if i == 0 {
+            0 // First sample executes immediately
+        } else {
+            // Calculate delta between current and previous sample
+            sample.t_ms.saturating_sub(matched_seg.points()[i - 1].t_ms)
+        };
+
+        if time_delta_ms > 0 {
+            debug!("Sleeping for {} ms before sample {}", time_delta_ms, i + 1);
+            thread::sleep(Duration::from_millis(time_delta_ms));
         }
 
         // Calculate progress factor (0.0 to 1.0)
