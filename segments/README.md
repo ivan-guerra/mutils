@@ -24,6 +24,16 @@ recognize mouse gestures.
 - **Comprehensive validation** - Built-in checks for segment duration,
   displacement, and point count
 
+## Installation
+
+To use as a library, add it to your `Cargo.toml`:
+
+````toml
+```toml
+[dependencies]
+segments = { git = "https://github.com/ivan-guerra/mutils", branch = "master" }
+````
+
 ## Basic Example
 
 ```rust
