@@ -16,8 +16,9 @@ mod database;
 
 pub use database::{DatabaseError, SegmentDatabase};
 
+/// Errors that can occur during mouse movement simulation
 #[derive(Error, Debug)]
-pub enum PathgenError {
+pub enum MouseSimError {
     #[error("Database error: {0}")]
     Database(#[from] DatabaseError),
 
@@ -42,9 +43,9 @@ pub fn move_mouse_humanlike(
     segdb: &SegmentDatabase,
     src: (i32, i32),
     dst: (i32, i32),
-) -> Result<(), PathgenError> {
+) -> Result<(), MouseSimError> {
     let mut enigo =
-        Enigo::new(&Settings::default()).map_err(|e| PathgenError::EnigoInit(e.to_string()))?;
+        Enigo::new(&Settings::default()).map_err(|e| MouseSimError::EnigoInit(e.to_string()))?;
 
     // Calculate target total displacement vector
     let target_dx = f64::from(dst.0 - src.0);
@@ -53,11 +54,11 @@ pub fn move_mouse_humanlike(
     // Query the database for the closest trajectory match
     let matched_seg = segdb
         .find_nearest(target_dx, target_dy)
-        .ok_or(PathgenError::EmptyDatabase)?;
+        .ok_or(MouseSimError::EmptyDatabase)?;
 
     let total_samples = matched_seg.points().len();
     if total_samples < 2 {
-        return Err(PathgenError::InsufficientSamples(total_samples));
+        return Err(MouseSimError::InsufficientSamples(total_samples));
     }
 
     // Establish our baseline recording origin from the first sample

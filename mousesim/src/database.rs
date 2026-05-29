@@ -14,6 +14,7 @@ use log::{debug, warn};
 use rstar::RTree;
 use thiserror::Error;
 
+/// Errors that can occur during database loading and querying
 #[derive(Error, Debug)]
 pub enum DatabaseError {
     #[error("IO error: {0}")]
@@ -26,6 +27,7 @@ pub enum DatabaseError {
     NoSegments,
 }
 
+/// Database for storing and querying gesture segments using R-tree spatial indexing.
 pub struct SegmentDatabase {
     // R-tree indexed by displacement vector (dx, dy)
     spatial_index: RTree<Segment>,
@@ -123,9 +125,9 @@ impl SegmentDatabase {
             .take(k)
     }
 
-    // Find the single nearest segment to a given displacement vector
-    //
-    // Returns the nearest segment
+    /// Find the single nearest segment to a given displacement vector
+    ///
+    /// Returns the nearest segment
     pub fn find_nearest(&self, dx: f64, dy: f64) -> Option<&Segment> {
         self.spatial_index
             .nearest_neighbor_with_distance_2([dx, dy])
